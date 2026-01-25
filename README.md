@@ -8,7 +8,7 @@ A Go HTTP server library that provides dual-server architecture with built-in ob
 
 - **Dual Server Architecture**: Separate internal and external servers to protect internal endpoints
 - **Built-in Observability**: Prometheus metrics, structured logging, and health checks
-- **Flexible Configuration**: Functional options pattern for easy customization
+- **Flexible Configuration**: Functional options pattern with Viper support for easy customization
 - **Production Ready**: Proper timeouts, header limits, and error handling
 
 ## Installation
@@ -125,6 +125,112 @@ srvr.WithInternalLogging(true)   // Log internal server requests
 srvr.WithExternalLogging(false)  // Disable external server request logging
 ```
 
+## Configuration with Viper
+
+The library supports configuration via [Viper](https://github.com/spf13/viper), allowing you to manage settings through config files, environment variables, and other sources.
+
+### Using the Global Viper Instance
+
+By default, the server uses the global Viper instance and automatically sets up configuration keys:
+
+```go
+import (
+    "github.com/spf13/viper"
+    "github.com/tpyle/srvr"
+)
+
+func main() {
+    // Configure viper
+    viper.SetDefault("srvr.externalPort", 8080)
+    viper.SetDefault("srvr.internalPort", 8081)
+
+    // Set custom values via config file, env vars, etc.
+    viper.Set("srvr.externalPort", 3000)
+    viper.Set("srvr.readTimeout", 30) // in seconds
+
+    // Server will use global viper configuration
+    server := srvr.Create(
+        srvr.WithExternalRouter(router),
+    )
+}
+```
+
+### Using a Custom Viper Instance
+
+You can also provide your own Viper instance:
+
+```go
+func main() {
+    // Create custom viper instance
+    v := viper.New()
+    v.SetConfigName("server")
+    v.SetConfigType("yaml")
+    v.AddConfigPath("./config")
+
+    // Read configuration
+    if err := v.ReadInConfig(); err != nil {
+        log.Fatal(err)
+    }
+
+    server := srvr.Create(
+        srvr.WithViper(v),
+        srvr.WithExternalRouter(router),
+    )
+}
+```
+
+### Supported Configuration Keys
+
+The following configuration keys are supported (all prefixed with `srvr.`):
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `srvr.internalPort` | int | 8081 | Internal server port |
+| `srvr.externalPort` | int | 8080 | External server port |
+| `srvr.readTimeout` | int | 5 | Read timeout in seconds |
+| `srvr.writeTimeout` | int | 10 | Write timeout in seconds |
+| `srvr.idleTimeout` | int | 120 | Idle timeout in seconds |
+| `srvr.readHeaderTimeout` | int | 2 | Read header timeout in seconds |
+| `srvr.maxHeaderBytes` | int | 1048576 | Max header bytes (1MB) |
+| `srvr.doLogInternalRouter` | bool | true | Enable internal request logging |
+| `srvr.doLogExternalRouter` | bool | true | Enable external request logging |
+
+### Configuration File Example
+
+```yaml
+# config/server.yaml
+srvr:
+  externalPort: 8080
+  internalPort: 8081
+  readTimeout: 15
+  writeTimeout: 30
+  idleTimeout: 300
+  doLogInternalRouter: false
+  doLogExternalRouter: true
+```
+
+### Environment Variables
+
+When using Viper, you can also configure via environment variables:
+
+```bash
+export SRVR_EXTERNALPORT=3000
+export SRVR_INTERNELPORT=3001
+export SRVR_READTIMEOUT=20
+export SRVR_DOLOGEXTERNALROUTER=false
+```
+
+```go
+func main() {
+    viper.SetEnvPrefix("SRVR")
+    viper.AutomaticEnv()
+
+    server := srvr.Create(
+        srvr.WithExternalRouter(router),
+    )
+}
+```
+
 ## Health Checks
 
 ### Adding Readiness Checks
@@ -167,11 +273,24 @@ import (
     "time"
 
     "github.com/gorilla/mux"
+    "github.com/spf13/viper"
     "github.com/tpyle/srvr"
     _ "github.com/lib/pq"
 )
 
 func main() {
+    // Configure viper (optional - uses global instance by default)
+    viper.SetConfigName("server")
+    viper.SetConfigType("yaml")
+    viper.AddConfigPath("./config")
+    viper.SetEnvPrefix("SRVR")
+    viper.AutomaticEnv()
+
+    // Read config file (optional)
+    if err := viper.ReadInConfig(); err != nil {
+        log.Printf("No config file found: %v", err)
+    }
+
     // Setup database
     db, err := sql.Open("postgres", "postgresql://...")
     if err != nil {
@@ -288,5 +407,6 @@ err = server.Stop()
 - [Gorilla Mux](https://github.com/gorilla/mux) - HTTP router
 - [Prometheus Client](https://github.com/prometheus/client_golang) - Metrics
 - [Zerolog](https://github.com/rs/zerolog) - Structured logging
+- [Viper](https://github.com/spf13/viper) - Configuration management
 - [Log Manager](https://github.com/tpyle/log-manager) - Dynamic log level management
 - [Log Middleware](https://github.com/tpyle/log-middleware) - Request logging

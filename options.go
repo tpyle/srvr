@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/gorilla/mux"
+	"github.com/spf13/viper"
 )
 
 type Option func(*Options)
@@ -49,6 +50,8 @@ type Options struct {
 	externalRouter      *mux.Router
 	doLogExternalRouter bool
 	readinessChecks     map[string]ReadinessCheckFunc
+
+	viperRef *viper.Viper // Optional reference to a Viper instance for config from viper
 }
 
 func defaultOptions() *Options {
@@ -67,6 +70,7 @@ func defaultOptions() *Options {
 		readinessChecks:     map[string]ReadinessCheckFunc{},
 		doLogInternalRouter: true,
 		doLogExternalRouter: true,
+		viperRef:            viper.GetViper(),
 	}
 }
 
@@ -173,6 +177,34 @@ func WithReadinessManagement(route string) Option {
 	return func(o *Options) {
 		o.readinessManager = &ReadinessManager{
 			route,
+		}
+	}
+}
+
+func WithViper(viper *viper.Viper) Option {
+	return func(o *Options) {
+		o.viperRef = viper
+
+		if viper != nil {
+			o.viperRef.SetDefault("srvr.internalPort", o.internalPort)
+			o.viperRef.SetDefault("srvr.externalPort", o.externalPort)
+			o.viperRef.SetDefault("srvr.readTimeout", o.readTimeout.Seconds())
+			o.viperRef.SetDefault("srvr.writeTimeout", o.writeTimeout.Seconds())
+			o.viperRef.SetDefault("srvr.idleTimeout", o.idleTimeout.Seconds())
+			o.viperRef.SetDefault("srvr.readHeaderTimeout", o.readHeaderTimeout.Seconds())
+			o.viperRef.SetDefault("srvr.maxHeaderBytes", o.maxHeaderBytes)
+			o.viperRef.SetDefault("srvr.doLogInternalRouter", o.doLogInternalRouter)
+			o.viperRef.SetDefault("srvr.doLogExternalRouter", o.doLogExternalRouter)
+
+			o.internalPort = o.viperRef.GetInt("srvr.internalPort")
+			o.externalPort = o.viperRef.GetInt("srvr.externalPort")
+			o.readTimeout = time.Duration(o.viperRef.GetInt("srvr.readTimeout")) * time.Second
+			o.writeTimeout = time.Duration(o.viperRef.GetInt("srvr.writeTimeout")) * time.Second
+			o.idleTimeout = time.Duration(o.viperRef.GetInt("srvr.idleTimeout")) * time.Second
+			o.readHeaderTimeout = time.Duration(o.viperRef.GetInt("srvr.readHeaderTimeout")) * time.Second
+			o.maxHeaderBytes = o.viperRef.GetInt("srvr.maxHeaderBytes")
+			o.doLogInternalRouter = o.viperRef.GetBool("srvr.doLogInternalRouter")
+			o.doLogExternalRouter = o.viperRef.GetBool("srvr.doLogExternalRouter")
 		}
 	}
 }
