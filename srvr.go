@@ -3,6 +3,7 @@ package srvr
 import (
 	"fmt"
 	"net/http"
+	"sync"
 
 	"github.com/prometheus/client_golang/prometheus"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -15,6 +16,7 @@ type Server struct {
 	options        *Options
 	internalServer *http.Server
 	externalServer *http.Server
+	waitGroup      *sync.WaitGroup
 }
 
 func (s *Server) livenessHandler(w http.ResponseWriter, _ *http.Request) {
@@ -42,7 +44,8 @@ func Create(opts ...Option) *Server {
 	}
 
 	server := &Server{
-		options: o,
+		options:   o,
+		waitGroup: &sync.WaitGroup{},
 	}
 
 	if o.internalRouter != nil {
@@ -103,24 +106,51 @@ func Create(opts ...Option) *Server {
 
 func (s *Server) Start() error {
 	if s.internalServer != nil {
-		go func() {
+		s.waitGroup.Go(func() {
 			if err := s.internalServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Error().Err(err).Msg("Internal server error")
 			}
-		}()
+		})
 		log.Info().Msgf("Internal server started on port %d", s.options.internalPort)
 	}
 
 	if s.externalServer != nil {
-		go func() {
+		s.waitGroup.Go(func() {
 			if err := s.externalServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 				log.Error().Err(err).Msg("External server error")
 			}
-		}()
+		})
 		log.Info().Msgf("External server started on port %d", s.options.externalPort)
 	}
 
 	return nil
+}
+
+// Comparable to Start, but blocks the current goroutine
+func (s *Server) Run() {
+	if s.internalServer != nil {
+		s.waitGroup.Go(func() {
+			if err := s.internalServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Error().Err(err).Msg("Internal server error")
+			}
+		})
+		log.Info().Msgf("Internal server started on port %d", s.options.internalPort)
+	}
+
+	if s.externalServer != nil {
+		s.waitGroup.Go(func() {
+			if err := s.externalServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Error().Err(err).Msg("External server error")
+			}
+		})
+		log.Info().Msgf("External server started on port %d", s.options.externalPort)
+	}
+
+	s.waitGroup.Wait()
+}
+
+func (s *Server) Wait() {
+	s.waitGroup.Wait()
 }
 
 func (s *Server) Stop() error {
