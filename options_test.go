@@ -591,3 +591,167 @@ func TestWithViperGlobalInstance(t *testing.T) {
 		t.Error("Expected viperRef to be the global viper instance")
 	}
 }
+
+func TestWithViperPrefix(t *testing.T) {
+	opts := defaultOptions()
+	v := viper.New()
+	prefix := "myapp."
+	option := WithViperPrefix(v, prefix)
+	option(opts)
+
+	if opts.viperRef != v {
+		t.Error("Expected viper reference to be set")
+	}
+
+	// Verify defaults were set with prefix
+	if v.GetInt(prefix+"srvr.internalPort") != 8081 {
+		t.Errorf("Expected viper default internal port 8081 with prefix, got %d", v.GetInt(prefix+"srvr.internalPort"))
+	}
+	if v.GetInt(prefix+"srvr.externalPort") != 8080 {
+		t.Errorf("Expected viper default external port 8080 with prefix, got %d", v.GetInt(prefix+"srvr.externalPort"))
+	}
+	if v.GetInt(prefix+"srvr.readTimeout") != 5 {
+		t.Errorf("Expected viper default read timeout 5 with prefix, got %d", v.GetInt(prefix+"srvr.readTimeout"))
+	}
+	if v.GetInt(prefix+"srvr.writeTimeout") != 10 {
+		t.Errorf("Expected viper default write timeout 10 with prefix, got %d", v.GetInt(prefix+"srvr.writeTimeout"))
+	}
+	if v.GetInt(prefix+"srvr.idleTimeout") != 120 {
+		t.Errorf("Expected viper default idle timeout 120 with prefix, got %d", v.GetInt(prefix+"srvr.idleTimeout"))
+	}
+	if v.GetInt(prefix+"srvr.readHeaderTimeout") != 2 {
+		t.Errorf("Expected viper default read header timeout 2 with prefix, got %d", v.GetInt(prefix+"srvr.readHeaderTimeout"))
+	}
+	if v.GetInt(prefix+"srvr.maxHeaderBytes") != 1<<20 {
+		t.Errorf("Expected viper default max header bytes %d with prefix, got %d", 1<<20, v.GetInt(prefix+"srvr.maxHeaderBytes"))
+	}
+	if !v.GetBool(prefix + "srvr.doLogInternalRouter") {
+		t.Error("Expected viper default doLogInternalRouter to be true with prefix")
+	}
+	if !v.GetBool(prefix + "srvr.doLogExternalRouter") {
+		t.Error("Expected viper default doLogExternalRouter to be true with prefix")
+	}
+}
+
+func TestWithViperPrefixEmptyString(t *testing.T) {
+	opts := defaultOptions()
+	v := viper.New()
+	option := WithViperPrefix(v, "")
+	option(opts)
+
+	if opts.viperRef != v {
+		t.Error("Expected viper reference to be set")
+	}
+
+	// Verify defaults were set without prefix (should behave like WithViper)
+	if v.GetInt("srvr.internalPort") != 8081 {
+		t.Errorf("Expected viper default internal port 8081 without prefix, got %d", v.GetInt("srvr.internalPort"))
+	}
+	if v.GetInt("srvr.externalPort") != 8080 {
+		t.Errorf("Expected viper default external port 8080 without prefix, got %d", v.GetInt("srvr.externalPort"))
+	}
+}
+
+func TestWithViperPrefixCustomValues(t *testing.T) {
+	opts := defaultOptions()
+	v := viper.New()
+	prefix := "webapp."
+
+	// Set custom values in viper with prefix before applying the option
+	v.Set(prefix+"srvr.internalPort", 9191)
+	v.Set(prefix+"srvr.externalPort", 8989)
+	v.Set(prefix+"srvr.readTimeout", 25)
+	v.Set(prefix+"srvr.writeTimeout", 45)
+	v.Set(prefix+"srvr.idleTimeout", 240)
+	v.Set(prefix+"srvr.readHeaderTimeout", 5)
+	v.Set(prefix+"srvr.maxHeaderBytes", 4096)
+	v.Set(prefix+"srvr.doLogInternalRouter", false)
+	v.Set(prefix+"srvr.doLogExternalRouter", false)
+
+	option := WithViperPrefix(v, prefix)
+	option(opts)
+
+	// Verify the options were updated with prefixed viper values
+	if opts.internalPort != 9191 {
+		t.Errorf("Expected internal port 9191, got %d", opts.internalPort)
+	}
+	if opts.externalPort != 8989 {
+		t.Errorf("Expected external port 8989, got %d", opts.externalPort)
+	}
+	if opts.readTimeout != 25*time.Second {
+		t.Errorf("Expected read timeout 25s, got %v", opts.readTimeout)
+	}
+	if opts.writeTimeout != 45*time.Second {
+		t.Errorf("Expected write timeout 45s, got %v", opts.writeTimeout)
+	}
+	if opts.idleTimeout != 240*time.Second {
+		t.Errorf("Expected idle timeout 240s, got %v", opts.idleTimeout)
+	}
+	if opts.readHeaderTimeout != 5*time.Second {
+		t.Errorf("Expected read header timeout 5s, got %v", opts.readHeaderTimeout)
+	}
+	if opts.maxHeaderBytes != 4096 {
+		t.Errorf("Expected max header bytes 4096, got %d", opts.maxHeaderBytes)
+	}
+	if opts.doLogInternalRouter {
+		t.Error("Expected doLogInternalRouter to be false")
+	}
+	if opts.doLogExternalRouter {
+		t.Error("Expected doLogExternalRouter to be false")
+	}
+}
+
+func TestWithViperPrefixNil(t *testing.T) {
+	opts := defaultOptions()
+	prefix := "test."
+	option := WithViperPrefix(nil, prefix)
+	option(opts)
+
+	// Verify that viperRef is set to nil
+	if opts.viperRef != nil {
+		t.Error("Expected viper reference to be nil")
+	}
+
+	// The function should handle nil gracefully and not panic,
+	// but the options should remain with their original default values
+	if opts.internalPort != 8081 {
+		t.Errorf("Expected internal port to remain 8081, got %d", opts.internalPort)
+	}
+	if opts.externalPort != 8080 {
+		t.Errorf("Expected external port to remain 8080, got %d", opts.externalPort)
+	}
+}
+
+func TestWithViperPrefixKeyIsolation(t *testing.T) {
+	opts1 := defaultOptions()
+	opts2 := defaultOptions()
+	v := viper.New()
+
+	// Set values with different prefixes
+	v.Set("app1.srvr.internalPort", 8181)
+	v.Set("app1.srvr.externalPort", 8080)
+	v.Set("app2.srvr.internalPort", 8282)
+	v.Set("app2.srvr.externalPort", 8181)
+
+	// Apply options with different prefixes
+	option1 := WithViperPrefix(v, "app1.")
+	option1(opts1)
+
+	option2 := WithViperPrefix(v, "app2.")
+	option2(opts2)
+
+	// Verify that each option uses its own prefixed values
+	if opts1.internalPort != 8181 {
+		t.Errorf("Expected app1 internal port 8181, got %d", opts1.internalPort)
+	}
+	if opts1.externalPort != 8080 {
+		t.Errorf("Expected app1 external port 8080, got %d", opts1.externalPort)
+	}
+
+	if opts2.internalPort != 8282 {
+		t.Errorf("Expected app2 internal port 8282, got %d", opts2.internalPort)
+	}
+	if opts2.externalPort != 8181 {
+		t.Errorf("Expected app2 external port 8181, got %d", opts2.externalPort)
+	}
+}

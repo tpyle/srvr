@@ -182,29 +182,33 @@ func WithReadinessManagement(route string) Option {
 }
 
 func WithViper(viper *viper.Viper) Option {
+	return WithViperPrefix(viper, "")
+}
+
+func WithViperPrefix(viper *viper.Viper, prefix string) Option {
 	return func(o *Options) {
 		o.viperRef = viper
 
 		if viper != nil {
-			o.viperRef.SetDefault("srvr.internalPort", o.internalPort)
-			o.viperRef.SetDefault("srvr.externalPort", o.externalPort)
-			o.viperRef.SetDefault("srvr.readTimeout", o.readTimeout.Seconds())
-			o.viperRef.SetDefault("srvr.writeTimeout", o.writeTimeout.Seconds())
-			o.viperRef.SetDefault("srvr.idleTimeout", o.idleTimeout.Seconds())
-			o.viperRef.SetDefault("srvr.readHeaderTimeout", o.readHeaderTimeout.Seconds())
-			o.viperRef.SetDefault("srvr.maxHeaderBytes", o.maxHeaderBytes)
-			o.viperRef.SetDefault("srvr.doLogInternalRouter", o.doLogInternalRouter)
-			o.viperRef.SetDefault("srvr.doLogExternalRouter", o.doLogExternalRouter)
+			viper.SetDefault(prefix+"srvr.internalPort", o.internalPort)
+			viper.SetDefault(prefix+"srvr.externalPort", o.externalPort)
+			viper.SetDefault(prefix+"srvr.readTimeout", o.readTimeout.Seconds())
+			viper.SetDefault(prefix+"srvr.writeTimeout", o.writeTimeout.Seconds())
+			viper.SetDefault(prefix+"srvr.idleTimeout", o.idleTimeout.Seconds())
+			viper.SetDefault(prefix+"srvr.readHeaderTimeout", o.readHeaderTimeout.Seconds())
+			viper.SetDefault(prefix+"srvr.maxHeaderBytes", o.maxHeaderBytes)
+			viper.SetDefault(prefix+"srvr.doLogInternalRouter", o.doLogInternalRouter)
+			viper.SetDefault(prefix+"srvr.doLogExternalRouter", o.doLogExternalRouter)
 
-			o.internalPort = o.viperRef.GetInt("srvr.internalPort")
-			o.externalPort = o.viperRef.GetInt("srvr.externalPort")
-			o.readTimeout = time.Duration(o.viperRef.GetInt("srvr.readTimeout")) * time.Second
-			o.writeTimeout = time.Duration(o.viperRef.GetInt("srvr.writeTimeout")) * time.Second
-			o.idleTimeout = time.Duration(o.viperRef.GetInt("srvr.idleTimeout")) * time.Second
-			o.readHeaderTimeout = time.Duration(o.viperRef.GetInt("srvr.readHeaderTimeout")) * time.Second
-			o.maxHeaderBytes = o.viperRef.GetInt("srvr.maxHeaderBytes")
-			o.doLogInternalRouter = o.viperRef.GetBool("srvr.doLogInternalRouter")
-			o.doLogExternalRouter = o.viperRef.GetBool("srvr.doLogExternalRouter")
+			o.internalPort = viper.GetInt(prefix + "srvr.internalPort")
+			o.externalPort = viper.GetInt(prefix + "srvr.externalPort")
+			o.readTimeout = time.Duration(viper.GetInt(prefix+"srvr.readTimeout")) * time.Second
+			o.writeTimeout = time.Duration(viper.GetInt(prefix+"srvr.writeTimeout")) * time.Second
+			o.idleTimeout = time.Duration(viper.GetInt(prefix+"srvr.idleTimeout")) * time.Second
+			o.readHeaderTimeout = time.Duration(viper.GetInt(prefix+"srvr.readHeaderTimeout")) * time.Second
+			o.maxHeaderBytes = viper.GetInt(prefix + "srvr.maxHeaderBytes")
+			o.doLogInternalRouter = viper.GetBool(prefix + "srvr.doLogInternalRouter")
+			o.doLogExternalRouter = viper.GetBool(prefix + "srvr.doLogExternalRouter")
 		}
 	}
 }

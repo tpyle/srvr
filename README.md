@@ -179,6 +179,51 @@ func main() {
 }
 ```
 
+### Using Viper with a Custom Prefix
+
+When you have multiple services or applications sharing the same configuration source, you can use `WithViperPrefix` to isolate your server configuration with a custom prefix:
+
+```go
+func main() {
+    // Create custom viper instance
+    v := viper.New()
+    v.SetConfigName("app")
+    v.SetConfigType("yaml")
+    v.AddConfigPath("./config")
+
+    if err := v.ReadInConfig(); err != nil {
+        log.Fatal(err)
+    }
+
+    // Use a custom prefix for the server configuration
+    server := srvr.Create(
+        srvr.WithViperPrefix(v, "webapi."),
+        srvr.WithExternalRouter(router),
+    )
+}
+```
+
+With this setup, your configuration file can contain multiple application configurations:
+
+```yaml
+# config/app.yaml
+webapi:
+  srvr:
+    externalPort: 8080
+    internalPort: 8081
+    readTimeout: 15
+
+workerservice:
+  srvr:
+    externalPort: 8090
+    internalPort: 8091
+    readTimeout: 30
+
+database:
+  host: localhost
+  port: 5432
+```
+
 ### Supported Configuration Keys
 
 The following configuration keys are supported (all prefixed with `srvr.`):
