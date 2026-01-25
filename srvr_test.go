@@ -141,8 +141,8 @@ func TestCreateWithBothRouters(t *testing.T) {
 func TestCreateWithNoRouters(t *testing.T) {
 	server := Create()
 
-	if server.internalServer != nil {
-		t.Error("Expected no internal server when no internal router provided")
+	if server.internalServer == nil {
+		t.Error("Expected default internal server when no internal router provided")
 	}
 	if server.externalServer != nil {
 		t.Error("Expected no external server when no external router provided")

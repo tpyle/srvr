@@ -71,6 +71,7 @@ func defaultOptions() *Options {
 		doLogInternalRouter: true,
 		doLogExternalRouter: true,
 		viperRef:            viper.GetViper(),
+		internalRouter:      mux.NewRouter(),
 	}
 }
 
