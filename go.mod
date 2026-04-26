@@ -5,7 +5,7 @@ go 1.25.5
 require (
 	github.com/gorilla/mux v1.8.1
 	github.com/prometheus/client_golang v1.23.2
-	github.com/rs/zerolog v1.34.0
+	github.com/rs/zerolog v1.35.1
 	github.com/spf13/viper v1.21.0
 	github.com/tpyle/log-manager/v2 v2.0.1
 	github.com/tpyle/log-middleware/v2 v2.0.1
