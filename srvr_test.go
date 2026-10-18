@@ -330,7 +330,7 @@ func getAvailablePort(t *testing.T) int {
 	if err != nil {
 		t.Fatalf("Failed to get available port: %v", err)
 	}
-	defer listener.Close()
+	defer func() { _ = listener.Close() }()
 
 	addr := listener.Addr().(*net.TCPAddr)
 	return addr.Port
@@ -342,13 +342,13 @@ func verifyServerListening(t *testing.T, port int, serverType string) {
 		t.Errorf("Expected %s server to be listening on port %d, but connection failed: %v", serverType, port, err)
 		return
 	}
-	conn.Close()
+	_ = conn.Close()
 }
 
 func verifyServerNotListening(t *testing.T, port int, serverType string) {
 	conn, err := net.DialTimeout("tcp", fmt.Sprintf("localhost:%d", port), 100*time.Millisecond)
 	if err == nil {
-		conn.Close()
+		_ = conn.Close()
 		t.Errorf("Expected %s server to not be listening on port %d, but connection succeeded", serverType, port)
 	}
 }
@@ -395,7 +395,7 @@ func BenchmarkStartStop(b *testing.B) {
 
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		servers[i].Start()
-		servers[i].Stop()
+		_ = servers[i].Start()
+		_ = servers[i].Stop()
 	}
 }

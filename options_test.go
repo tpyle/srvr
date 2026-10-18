@@ -55,9 +55,6 @@ func TestDefaultOptions(t *testing.T) {
 	if !opts.doLogExternalRouter {
 		t.Error("Expected doLogExternalRouter to be true")
 	}
-	if opts.viperRef != viper.GetViper() {
-		t.Error("Expected viperRef to be set to global viper instance")
-	}
 }
 
 func TestWithReadinessCheck(t *testing.T) {
@@ -410,10 +407,6 @@ func TestWithViper(t *testing.T) {
 	option := WithViper(v)
 	option(opts)
 
-	if opts.viperRef != v {
-		t.Error("Expected viper reference to be set")
-	}
-
 	// Verify defaults were set
 	if v.GetInt("srvr.internalPort") != 8081 {
 		t.Errorf("Expected viper default internal port 8081, got %d", v.GetInt("srvr.internalPort"))
@@ -534,11 +527,6 @@ func TestWithViperNil(t *testing.T) {
 	option := WithViper(nil)
 	option(opts)
 
-	// Verify that viperRef is set to nil
-	if opts.viperRef != nil {
-		t.Error("Expected viper reference to be nil")
-	}
-
 	// The function should handle nil gracefully and not panic,
 	// but the options should remain with their original default values
 	if opts.internalPort != 8081 {
@@ -586,10 +574,6 @@ func TestWithViperGlobalInstance(t *testing.T) {
 		t.Errorf("Expected external port 6666 from global viper, got %d", opts.externalPort)
 	}
 
-	// Verify viper reference is the global instance
-	if opts.viperRef != globalViper {
-		t.Error("Expected viperRef to be the global viper instance")
-	}
 }
 
 func TestWithViperPrefix(t *testing.T) {
@@ -598,10 +582,6 @@ func TestWithViperPrefix(t *testing.T) {
 	prefix := "myapp."
 	option := WithViperPrefix(v, prefix)
 	option(opts)
-
-	if opts.viperRef != v {
-		t.Error("Expected viper reference to be set")
-	}
 
 	// Verify defaults were set with prefix
 	if v.GetInt(prefix+"srvr.internalPort") != 8081 {
@@ -638,10 +618,6 @@ func TestWithViperPrefixEmptyString(t *testing.T) {
 	v := viper.New()
 	option := WithViperPrefix(v, "")
 	option(opts)
-
-	if opts.viperRef != v {
-		t.Error("Expected viper reference to be set")
-	}
 
 	// Verify defaults were set without prefix (should behave like WithViper)
 	if v.GetInt("srvr.internalPort") != 8081 {
@@ -706,11 +682,6 @@ func TestWithViperPrefixNil(t *testing.T) {
 	prefix := "test."
 	option := WithViperPrefix(nil, prefix)
 	option(opts)
-
-	// Verify that viperRef is set to nil
-	if opts.viperRef != nil {
-		t.Error("Expected viper reference to be nil")
-	}
 
 	// The function should handle nil gracefully and not panic,
 	// but the options should remain with their original default values
