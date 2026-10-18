@@ -1,457 +1,129 @@
 # srvr
 
-A Go HTTP server library that provides dual-server architecture with built-in observability, health checks, and structured logging.
-
-## Overview
-
-`srvr` is designed to simplify the creation of production-ready HTTP servers by providing:
-
-- **Dual Server Architecture**: Separate internal and external servers to protect internal endpoints
-- **Built-in Observability**: Prometheus metrics, structured logging, and health checks
-- **Flexible Configuration**: Functional options pattern with Viper support for easy customization
-- **Production Ready**: Proper timeouts, header limits, and error handling
-
-## Installation
+Run a Go HTTP service as two servers: an **external** one for your API and an
+**internal** one for operational endpoints that shouldn't be public. The
+internal server comes with liveness and readiness probes, Prometheus metrics,
+and a runtime log level endpoint, and both servers log every request through
+the standard library's `log/slog`.
 
 ```bash
 go get github.com/tpyle/srvr
 ```
 
-## Quick Start
+srvr requires Go 1.27 or newer.
 
-### Basic Server
+## Features
 
-```go
-package main
+- **Two servers**: your API on one port (default 8080), operational endpoints
+  on another (default 8081) that you keep off the public network.
+- **Health probes**: `/live` for liveness and `/ready` for readiness, which
+  runs the checks you register for your dependencies.
+- **Metrics**: `/metrics` serves Prometheus metrics, including request
+  counts, latency histograms and in-flight requests for the external server,
+  labelled by route template, method and status code.
+- **Logging with `log/slog`**: request IDs in an `X-Request-Id` header and in
+  every request log line, a request-scoped logger in each request context, and
+  `/logging` to change the level of a running process.
+- **Graceful lifecycle**: `Start` reports port bind errors, and `Stop` lets
+  in-flight requests finish before shutting down.
+- **Configuration**: functional options, plus optional
+  [Viper](https://github.com/spf13/viper) support for config files and
+  environment variables.
 
-import (
-    "github.com/tpyle/srvr"
-    "github.com/gorilla/mux"
-)
-
-func main() {
-    // Create routers
-    externalRouter := mux.NewRouter()
-    externalRouter.HandleFunc("/api/hello", func(w http.ResponseWriter, r *http.Request) {
-        w.Write([]byte("Hello, World!"))
-    })
-
-    // Create server with external router
-    server := srvr.Create(
-        srvr.WithExternalRouter(externalRouter),
-    )
-
-    // Start the server
-    if err := server.Start(); err != nil {
-        panic(err)
-    }
-
-    // Server is now running on:
-    // - External API: http://localhost:8080
-    // - Internal endpoints: http://localhost:8081
-}
-```
-
-### With Custom Configuration
+## Quick start
 
 ```go
+ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+defer stop()
+
+// Share one LevelVar between your slog handler and srvr so /logging can change it.
+level := new(slog.LevelVar)
+slog.SetDefault(slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: level})))
+
+router := mux.NewRouter()
+router.HandleFunc("/hello", func(w http.ResponseWriter, r *http.Request) {
+    logmiddleware.SlogFromContext(r.Context()).Info("saying hello") // carries requestId
+    w.Write([]byte("Hello, World!\n"))
+}).Methods(http.MethodGet)
+
 server := srvr.Create(
-    srvr.WithExternalPort(3000),
-    srvr.WithInternalPort(3001),
-    srvr.WithExternalRouter(externalRouter),
-    srvr.WithInternalRouter(internalRouter),
-    srvr.WithReadTimeout(30 * time.Second),
-    srvr.WithWriteTimeout(30 * time.Second),
+    srvr.WithExternalRouter(router),
+    srvr.WithLogLevel(level),
+    srvr.WithReadinessCheck("database", db.PingContext),
 )
-```
-
-## Server Architecture
-
-### Dual Server Design
-
-The library creates two HTTP servers:
-
-1. **External Server** (default port 8080): For your public API endpoints
-2. **Internal Server** (default port 8081): For observability and management endpoints
-
-### Default Internal Endpoints
-
-The internal server automatically provides:
-
-- `/live` - Liveness probe (always returns 200 OK)
-- `/ready` - Readiness probe (runs health checks)
-- `/metrics` - Prometheus metrics endpoint
-- `/logging` - Log level management endpoint
-
-## Configuration Options
-
-### Server Ports
-
-```go
-srvr.WithExternalPort(8080)  // External API port
-srvr.WithInternalPort(8081)  // Internal management port
-```
-
-### Routers
-
-```go
-srvr.WithExternalRouter(mux.NewRouter())  // Your API routes
-srvr.WithInternalRouter(mux.NewRouter())  // Additional internal routes
-```
-
-### Timeouts
-
-```go
-srvr.WithReadTimeout(5 * time.Second)
-srvr.WithWriteTimeout(10 * time.Second)
-srvr.WithIdleTimeout(120 * time.Second)
-srvr.WithReadHeaderTimeout(2 * time.Second)
-srvr.WithMaxHeaderBytes(1 << 20)  // 1 MB
-```
-
-### Endpoint Customization
-
-```go
-srvr.WithLivenessManagement("/health/live")
-srvr.WithReadinessManagement("/health/ready")
-srvr.WithMetricsRoute("/prometheus")
-srvr.WithLogManagement("/admin/logging")
-```
-
-### Logging Control
-
-```go
-srvr.WithInternalLogging(true)   // Log internal server requests
-srvr.WithExternalLogging(false)  // Disable external server request logging
-```
-
-## Configuration with Viper
-
-The library supports configuration via [Viper](https://github.com/spf13/viper), allowing you to manage settings through config files, environment variables, and other sources.
-
-### Using the Global Viper Instance
-
-By default, the server uses the global Viper instance and automatically sets up configuration keys:
-
-```go
-import (
-    "github.com/spf13/viper"
-    "github.com/tpyle/srvr"
-)
-
-func main() {
-    // Configure viper
-    viper.SetDefault("srvr.externalPort", 8080)
-    viper.SetDefault("srvr.internalPort", 8081)
-
-    // Set custom values via config file, env vars, etc.
-    viper.Set("srvr.externalPort", 3000)
-    viper.Set("srvr.readTimeout", 30) // in seconds
-
-    // Server will use global viper configuration
-    server := srvr.Create(
-        srvr.WithExternalRouter(router),
-    )
+if err := server.Start(); err != nil {
+    return err
 }
-```
 
-### Using a Custom Viper Instance
-
-You can also provide your own Viper instance:
-
-```go
-func main() {
-    // Create custom viper instance
-    v := viper.New()
-    v.SetConfigName("server")
-    v.SetConfigType("yaml")
-    v.AddConfigPath("./config")
-
-    // Read configuration
-    if err := v.ReadInConfig(); err != nil {
-        log.Fatal(err)
-    }
-
-    server := srvr.Create(
-        srvr.WithViper(v),
-        srvr.WithExternalRouter(router),
-    )
+<-ctx.Done()
+if err := server.Stop(); err != nil {
+    return err
 }
+server.Wait()
 ```
-
-### Using Viper with a Custom Prefix
-
-When you have multiple services or applications sharing the same configuration source, you can use `WithViperPrefix` to isolate your server configuration with a custom prefix:
-
-```go
-func main() {
-    // Create custom viper instance
-    v := viper.New()
-    v.SetConfigName("app")
-    v.SetConfigType("yaml")
-    v.AddConfigPath("./config")
-
-    if err := v.ReadInConfig(); err != nil {
-        log.Fatal(err)
-    }
-
-    // Use a custom prefix for the server configuration
-    server := srvr.Create(
-        srvr.WithViperPrefix(v, "webapi."),
-        srvr.WithExternalRouter(router),
-    )
-}
-```
-
-With this setup, your configuration file can contain multiple application configurations:
-
-```yaml
-# config/app.yaml
-webapi:
-  srvr:
-    externalPort: 8080
-    internalPort: 8081
-    readTimeout: 15
-
-workerservice:
-  srvr:
-    externalPort: 8090
-    internalPort: 8091
-    readTimeout: 30
-
-database:
-  host: localhost
-  port: 5432
-```
-
-### Supported Configuration Keys
-
-The following configuration keys are supported (all prefixed with `srvr.`):
-
-| Key | Type | Default | Description |
-|-----|------|---------|-------------|
-| `srvr.internalPort` | int | 8081 | Internal server port |
-| `srvr.externalPort` | int | 8080 | External server port |
-| `srvr.readTimeout` | int | 5 | Read timeout in seconds |
-| `srvr.writeTimeout` | int | 10 | Write timeout in seconds |
-| `srvr.idleTimeout` | int | 120 | Idle timeout in seconds |
-| `srvr.readHeaderTimeout` | int | 2 | Read header timeout in seconds |
-| `srvr.maxHeaderBytes` | int | 1048576 | Max header bytes (1MB) |
-| `srvr.doLogInternalRouter` | bool | true | Enable internal request logging |
-| `srvr.doLogExternalRouter` | bool | true | Enable external request logging |
-
-### Configuration File Example
-
-```yaml
-# config/server.yaml
-srvr:
-  externalPort: 8080
-  internalPort: 8081
-  readTimeout: 15
-  writeTimeout: 30
-  idleTimeout: 300
-  doLogInternalRouter: false
-  doLogExternalRouter: true
-```
-
-### Environment Variables
-
-When using Viper, you can also configure via environment variables:
 
 ```bash
-export SRVR_EXTERNALPORT=3000
-export SRVR_INTERNELPORT=3001
-export SRVR_READTIMEOUT=20
-export SRVR_DOLOGEXTERNALROUTER=false
+curl localhost:8080/hello
+curl localhost:8081/live
+curl localhost:8081/ready
+curl localhost:8081/metrics
+curl -X POST localhost:8081/logging -H 'Content-Type: application/json' -d '{"level":"debug"}'
 ```
 
-```go
-func main() {
-    viper.SetEnvPrefix("SRVR")
-    viper.AutomaticEnv()
+## Options
 
-    server := srvr.Create(
-        srvr.WithExternalRouter(router),
-    )
-}
-```
+| Option | Default |
+|---|---|
+| `WithExternalPort`, `WithInternalPort` | 8080, 8081 |
+| `WithExternalRouter`, `WithInternalRouter` | none (no external server), a new router |
+| `WithReadinessCheck(name, check)` | no checks |
+| `WithLivenessManagement`, `WithReadinessManagement`, `WithMetricsRoute`, `WithLogManagement` | `/live`, `/ready`, `/metrics`, `/logging` |
+| `WithLogger(*slog.Logger)` | `slog.Default()` |
+| `WithLogLevel(*slog.LevelVar)` | none (`/logging` not served) |
+| `WithExternalLogging`, `WithInternalLogging` | `true`, `true` |
+| `WithReadTimeout`, `WithWriteTimeout`, `WithIdleTimeout`, `WithReadHeaderTimeout` | 5s, 10s, 120s, 2s |
+| `WithMaxHeaderBytes` | 1 MiB |
+| `WithShutdownTimeout` | 10s |
+| `WithMetricsRegistry(*prometheus.Registry)` | the Prometheus default registry |
+| `WithViper`, `WithViperPrefix` | Viper not used |
 
-## Health Checks
+## Documentation
 
-### Adding Readiness Checks
+The [wiki](https://github.com/tpyle/srvr/wiki) covers:
 
-Readiness checks determine if your application is ready to serve traffic:
+- [Getting Started](wiki/Getting-Started.md)
+- [Configuration](wiki/Configuration.md): every option and how options combine
+- [Configuring with Viper](wiki/Viper.md): config keys, files, environment variables
+- [Logging](wiki/Logging.md): request logs, request-scoped loggers, runtime log level
+- [Health Checks](wiki/Health-Checks.md): liveness, readiness, writing checks
+- [Metrics](wiki/Metrics.md): request metrics, example queries, custom registries
+- [Server Lifecycle](wiki/Server-Lifecycle.md): `Start`, `Run`, `Wait`, graceful `Stop`/`Shutdown`
+- [Migrating to slog](wiki/Migrating-to-slog.md): upgrading from v0.1 (slog, graceful shutdown, new metric names)
 
-```go
-// Database readiness check
-dbCheck := func(ctx context.Context) error {
-    return db.PingContext(ctx)
-}
+API reference: [pkg.go.dev/github.com/tpyle/srvr](https://pkg.go.dev/github.com/tpyle/srvr).
 
-// Redis readiness check
-cacheCheck := func(ctx context.Context) error {
-    return redisClient.Ping(ctx).Err()
-}
+## Examples
 
-server := srvr.Create(
-    srvr.WithReadinessCheck("database", dbCheck),
-    srvr.WithReadinessCheck("cache", cacheCheck),
-    srvr.WithExternalRouter(router),
-)
-```
+Runnable programs are in [`examples/`](examples):
 
-### Health Check Behavior
+| Example | Shows |
+|---|---|
+| [`basic`](examples/basic) | An API, all built-in endpoints, changing the log level at runtime |
+| [`health`](examples/health) | Readiness checks on a dependency, custom probe paths, extra internal routes |
+| [`viper`](examples/viper) | Configuration from YAML with environment variable overrides |
 
-- **Liveness**: Always returns `200 OK` (indicates the process is running)
-- **Readiness**: Returns `200 OK` only if all registered checks pass
-- **Failed Readiness**: Returns `503 Service Unavailable` with error details
-
-## Complete Example
-
-```go
-package main
-
-import (
-    "context"
-    "database/sql"
-    "net/http"
-    "time"
-
-    "github.com/gorilla/mux"
-    "github.com/spf13/viper"
-    "github.com/tpyle/srvr"
-    _ "github.com/lib/pq"
-)
-
-func main() {
-    // Configure viper (optional - uses global instance by default)
-    viper.SetConfigName("server")
-    viper.SetConfigType("yaml")
-    viper.AddConfigPath("./config")
-    viper.SetEnvPrefix("SRVR")
-    viper.AutomaticEnv()
-
-    // Read config file (optional)
-    if err := viper.ReadInConfig(); err != nil {
-        log.Printf("No config file found: %v", err)
-    }
-
-    // Setup database
-    db, err := sql.Open("postgres", "postgresql://...")
-    if err != nil {
-        panic(err)
-    }
-    defer db.Close()
-
-    // Create external router
-    externalRouter := mux.NewRouter()
-    externalRouter.HandleFunc("/api/users", handleUsers).Methods("GET")
-    externalRouter.HandleFunc("/api/health", handleHealth).Methods("GET")
-
-    // Create internal router (optional)
-    internalRouter := mux.NewRouter()
-    internalRouter.HandleFunc("/admin/status", handleAdminStatus).Methods("GET")
-
-    // Database health check
-    dbHealthCheck := func(ctx context.Context) error {
-        return db.PingContext(ctx)
-    }
-
-    // Create server
-    server := srvr.Create(
-        // Ports
-        srvr.WithExternalPort(8080),
-        srvr.WithInternalPort(8081),
-
-        // Routers
-        srvr.WithExternalRouter(externalRouter),
-        srvr.WithInternalRouter(internalRouter),
-
-        // Timeouts
-        srvr.WithReadTimeout(15 * time.Second),
-        srvr.WithWriteTimeout(15 * time.Second),
-        srvr.WithIdleTimeout(60 * time.Second),
-
-        // Health checks
-        srvr.WithReadinessCheck("database", dbHealthCheck),
-
-        // Custom endpoint paths
-        srvr.WithLivenessManagement("/health/live"),
-        srvr.WithReadinessManagement("/health/ready"),
-        srvr.WithMetricsRoute("/metrics"),
-
-        // Logging
-        srvr.WithExternalLogging(true),
-        srvr.WithInternalLogging(false),
-    )
-
-    // Start server
-    if err := server.Start(); err != nil {
-        panic(err)
-    }
-
-    // Wait for interrupt signal
-    // ... (signal handling code)
-
-    // Graceful shutdown
-    if err := server.Stop(); err != nil {
-        log.Error().Err(err).Msg("Error stopping server")
-    }
-}
-
-func handleUsers(w http.ResponseWriter, r *http.Request) {
-    w.Header().Set("Content-Type", "application/json")
-    w.Write([]byte(`{"users": []}`))
-}
-
-func handleHealth(w http.ResponseWriter, r *http.Request) {
-    w.Write([]byte("OK"))
-}
-
-func handleAdminStatus(w http.ResponseWriter, r *http.Request) {
-    w.Write([]byte("Admin OK"))
-}
-```
-
-## Observability Features
-
-### Metrics
-
-- Prometheus metrics are automatically collected for the external server
-- Access metrics at `http://localhost:8081/metrics` (or your configured path)
-- Includes standard HTTP metrics (request duration, response codes, etc.)
-
-### Logging
-
-- Structured logging using [zerolog](https://github.com/rs/zerolog)
-- Request logging middleware for both servers (configurable)
-- Dynamic log level management via `/logging` endpoint
-
-### Health Checks
-
-- Kubernetes-compatible liveness and readiness probes
-- Custom readiness checks for dependencies
-- Detailed error reporting for failed checks
-
-## Server Lifecycle
-
-```go
-server := srvr.Create(options...)
-
-// Start both servers (non-blocking)
-err := server.Start()
-
-// ... application runs ...
-
-// Graceful shutdown
-err = server.Stop()
+```bash
+go run ./examples/basic
 ```
 
 ## Dependencies
 
-- [Gorilla Mux](https://github.com/gorilla/mux) - HTTP router
-- [Prometheus Client](https://github.com/prometheus/client_golang) - Metrics
-- [Zerolog](https://github.com/rs/zerolog) - Structured logging
-- [Viper](https://github.com/spf13/viper) - Configuration management
-- [Log Manager](https://github.com/tpyle/log-manager) - Dynamic log level management
-- [Log Middleware](https://github.com/tpyle/log-middleware) - Request logging
+- [gorilla/mux](https://github.com/gorilla/mux): routing
+- [Prometheus Go client](https://github.com/prometheus/client_golang): metrics
+- [Viper](https://github.com/spf13/viper): optional configuration
+- [log-middleware](https://github.com/tpyle/log-middleware): request logging
+- [log-manager](https://github.com/tpyle/log-manager): runtime log level
+
+## License
+
+MIT. See [LICENSE](LICENSE).

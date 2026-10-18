@@ -299,7 +299,7 @@ func TestHealthEndpointsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	time.Sleep(100 * time.Millisecond) // Let server start
 
@@ -310,7 +310,7 @@ func TestHealthEndpointsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to call liveness endpoint: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected liveness status %d, got %d", http.StatusOK, resp.StatusCode)
@@ -321,7 +321,7 @@ func TestHealthEndpointsIntegration(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to call readiness endpoint: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected readiness status %d, got %d", http.StatusOK, resp.StatusCode)
@@ -349,7 +349,7 @@ func TestHealthEndpointsWithFailingReadinessCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to start server: %v", err)
 	}
-	defer server.Stop()
+	defer func() { _ = server.Stop() }()
 
 	time.Sleep(100 * time.Millisecond) // Let server start
 
@@ -360,7 +360,7 @@ func TestHealthEndpointsWithFailingReadinessCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to call liveness endpoint: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		t.Errorf("Expected liveness status %d, got %d", http.StatusOK, resp.StatusCode)
@@ -371,7 +371,7 @@ func TestHealthEndpointsWithFailingReadinessCheck(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to call readiness endpoint: %v", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusServiceUnavailable {
 		t.Errorf("Expected readiness status %d, got %d", http.StatusServiceUnavailable, resp.StatusCode)

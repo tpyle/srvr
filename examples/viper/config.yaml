@@ -1,0 +1,14 @@
+# srvr settings live under "<prefix>srvr". This example uses the prefix "api.",
+# so they are nested under api.srvr. Timeouts are seconds (15, 0.5) or Go
+# durations ("1m30s", "500ms").
+api:
+  srvr:
+    externalPort: 8080
+    internalPort: 8081
+    readTimeout: 15
+    writeTimeout: 15
+    idleTimeout: 60
+    readHeaderTimeout: 2
+    maxHeaderBytes: 65536
+    doLogInternalRouter: false
+    doLogExternalRouter: true
