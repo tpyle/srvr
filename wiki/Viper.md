@@ -43,9 +43,10 @@ Viper keys are case-insensitive, so `srvr.externalport` works too.
 
 Durations are either a number of seconds, which may be fractional (`15`,
 `0.5`), or a Go duration string (`"1m30s"`, `"500ms"`). Both forms work from
-config files and environment variables. An invalid duration is logged at warn
-level (`Ignoring invalid duration in configuration`) and the previous value is
-kept.
+config files and environment variables. An invalid duration is ignored and the
+previous value is kept. `Create` logs it at warn level (`Ignoring invalid
+duration in configuration`) with the logger from `WithLogger`, wherever that
+option appears in the list.
 
 Routers, readiness checks, endpoint paths, and the logger can only be set
 with options.

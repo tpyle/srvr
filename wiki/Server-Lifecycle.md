@@ -36,8 +36,8 @@ restarted; call `Create` for a new one.
 ### Listening addresses
 
 `InternalAddr()` and `ExternalAddr()` return the addresses the servers are
-listening on, or `nil` before `Start` (or for a server that isn't
-configured). With port 0 the operating system picks a free port, and these
+listening on, or `nil` before `Start`, after `Shutdown`, or for a server
+that isn't configured. With port 0 the operating system picks a free port, and these
 methods tell you which one. That's handy in tests:
 
 ```go
@@ -51,9 +51,11 @@ resp, err := http.Get("http://" + server.ExternalAddr().String() + "/hello")
 
 ## Stop and Shutdown
 
-`Shutdown(ctx)` shuts both servers down at the same time, gracefully:
+`Shutdown(ctx)` shuts the external server down gracefully, then the internal
+one, so probes and `/metrics` keep answering while your API drains. For each
+server:
 
-1. They stop accepting new connections and close idle ones.
+1. It stops accepting new connections and closes idle ones.
 2. Requests already in progress run to completion.
 3. If `ctx` ends first, the remaining connections are closed immediately and
    `Shutdown` returns the context's error, such as
@@ -71,8 +73,13 @@ servers or by watching a context.
 ## Wait and Run
 
 `Wait` blocks until both servers have stopped serving and, if `Stop` or
-`Shutdown` was called, until it has finished draining. After `Wait` returns,
-it is safe to exit.
+`Shutdown` was called, until `Shutdown` returns. After `Wait` returns, it is
+safe to exit.
+
+One caveat: if the shutdown deadline passes, the remaining connections are
+closed but their handlers are not waited for. A handler that ignores its
+request context (`r.Context()`) can still be running when `Wait` returns, so
+pass that context to database calls and other slow work.
 
 `Run` is `Start` followed by `Wait`. If `Start` fails, `Run` logs
 `Failed to start server` and returns immediately. Use `Start` and `Wait`

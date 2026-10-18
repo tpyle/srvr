@@ -86,20 +86,26 @@ func TestWithViperDurationFormats(t *testing.T) {
 }
 
 func TestWithViperInvalidDurationIsIgnored(t *testing.T) {
-	l, buf := newTestLogger()
-	v := viper.New()
-	v.Set("api.srvr.readTimeout", "soon")
+	for _, loggerFirst := range []bool{true, false} {
+		l, buf := newTestLogger()
+		v := viper.New()
+		v.Set("api.srvr.readTimeout", "soon")
 
-	opts := defaultOptions()
-	WithLogger(l)(opts)
-	WithViperPrefix(v, "api.")(opts)
+		opts := []Option{WithViperPrefix(v, "api.")}
+		if loggerFirst {
+			opts = append([]Option{WithLogger(l)}, opts...)
+		} else {
+			opts = append(opts, WithLogger(l))
+		}
+		s := Create(opts...)
 
-	if opts.readTimeout != 5*time.Second {
-		t.Errorf("readTimeout = %v, want the 5s default", opts.readTimeout)
-	}
-	rec := findRecord(logRecords(t, buf), "Ignoring invalid duration in configuration")
-	if rec == nil || rec["key"] != "api.srvr.readTimeout" {
-		t.Errorf("expected a warning naming the key, got %q", buf.String())
+		if s.options.readTimeout != 5*time.Second {
+			t.Errorf("loggerFirst=%v: readTimeout = %v, want the 5s default", loggerFirst, s.options.readTimeout)
+		}
+		rec := findRecord(logRecords(t, buf), "Ignoring invalid duration in configuration")
+		if rec == nil || rec["key"] != "api.srvr.readTimeout" {
+			t.Errorf("loggerFirst=%v: expected a warning naming the key, got %q", loggerFirst, buf.String())
+		}
 	}
 }
 

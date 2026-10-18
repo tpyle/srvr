@@ -239,6 +239,64 @@ func TestShutdownDrainsInFlightRequests(t *testing.T) {
 	}
 }
 
+func TestInternalServerOutlivesExternalDrain(t *testing.T) {
+	s, entered, release := newLifecycleServer(t)
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	internal := s.InternalAddr().String()
+	result := startBlockedRequest(t, s, entered)
+
+	shutdownErr := make(chan error, 1)
+	go func() { shutdownErr <- s.Shutdown(context.Background()) }()
+
+	// Wait until the external server has stopped accepting connections.
+	deadline := time.Now().Add(5 * time.Second)
+	for {
+		conn, err := net.Dial("tcp", s.ExternalAddr().String())
+		if err != nil {
+			break
+		}
+		_ = conn.Close()
+		if time.Now().After(deadline) {
+			t.Fatal("external server still accepting connections")
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	// Probes still answer while the external request drains.
+	resp, err := http.Get(fmt.Sprintf("http://%s/live", internal))
+	if err != nil {
+		t.Fatalf("internal server stopped before the external drain finished: %v", err)
+	}
+	_ = resp.Body.Close()
+
+	close(release)
+	if err := <-result; err != nil {
+		t.Errorf("in-flight request failed: %v", err)
+	}
+	if err := <-shutdownErr; err != nil {
+		t.Errorf("Shutdown() = %v", err)
+	}
+	if _, err := net.Dial("tcp", internal); err == nil {
+		t.Error("internal server still accepting connections after Shutdown")
+	}
+	s.Wait()
+}
+
+func TestAddrsClearedAfterShutdown(t *testing.T) {
+	s, _, _ := newLifecycleServer(t)
+	if err := s.Start(); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if s.InternalAddr() != nil || s.ExternalAddr() != nil {
+		t.Errorf("addresses after Stop = %v, %v; want nil", s.InternalAddr(), s.ExternalAddr())
+	}
+}
+
 func TestShutdownDeadlineClosesConnections(t *testing.T) {
 	s, entered, _ := newLifecycleServer(t)
 	if err := s.Start(); err != nil {

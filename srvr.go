@@ -131,6 +131,10 @@ func Create(opts ...Option) *Server {
 	for _, opt := range opts {
 		opt(o)
 	}
+	// Logged now so that a WithLogger after WithViper still applies.
+	for _, w := range o.configWarnings {
+		o.log().Warn("Ignoring invalid duration in configuration", "key", w.key, "err", w.err)
+	}
 
 	server := &Server{
 		options:   o,
@@ -257,7 +261,7 @@ func (s *Server) serve(name string, srv *http.Server, ln net.Listener) {
 }
 
 // InternalAddr returns the address the internal server is listening on, or
-// nil if it is not running. With port 0 it reports the port that was chosen.
+// nil before Start and after Shutdown. With port 0 it reports the port that was chosen.
 func (s *Server) InternalAddr() net.Addr {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -265,7 +269,7 @@ func (s *Server) InternalAddr() net.Addr {
 }
 
 // ExternalAddr returns the address the external server is listening on, or
-// nil if it is not running. With port 0 it reports the port that was chosen.
+// nil before Start and after Shutdown. With port 0 it reports the port that was chosen.
 func (s *Server) ExternalAddr() net.Addr {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -284,7 +288,11 @@ func (s *Server) Run() {
 }
 
 // Wait blocks until both servers have stopped serving and, if Stop or
-// Shutdown was called, until it has finished draining in-flight requests.
+// Shutdown was called, until Shutdown returns.
+//
+// If the shutdown deadline passes, the remaining connections are closed but
+// their handlers are not waited for: a handler that ignores its request
+// context can still be running when Wait returns.
 func (s *Server) Wait() {
 	s.waitGroup.Wait()
 
@@ -305,13 +313,14 @@ func (s *Server) Stop() error {
 	return s.Shutdown(ctx)
 }
 
-// Shutdown gracefully shuts down both servers concurrently: they stop
-// accepting connections, idle connections are closed, and Shutdown waits for
-// in-flight requests to finish. If ctx ends first, the remaining connections
-// are closed immediately and the context's error is returned.
+// Shutdown gracefully shuts down the external server and then the internal
+// one: each stops accepting connections, closes idle connections and waits
+// for in-flight requests to finish. If ctx ends first, the remaining
+// connections are closed immediately and the context's error is returned.
 //
-// Both servers are always shut down; errors from each are joined. After
-// Shutdown the Server cannot be started again.
+// The internal server keeps serving probes and metrics while the external
+// server drains. Both servers are always shut down; errors from each are
+// joined. After Shutdown the Server cannot be started again.
 func (s *Server) Shutdown(ctx context.Context) error {
 	s.mu.Lock()
 	s.state = stateStopped
@@ -321,16 +330,18 @@ func (s *Server) Shutdown(ctx context.Context) error {
 	}
 	s.mu.Unlock()
 
-	var wg sync.WaitGroup
-	var internalErr, externalErr error
-	if s.internalServer != nil {
-		wg.Go(func() { internalErr = s.shutdown(ctx, "Internal", s.internalServer) })
-	}
+	var externalErr, internalErr error
 	if s.externalServer != nil {
-		wg.Go(func() { externalErr = s.shutdown(ctx, "External", s.externalServer) })
+		externalErr = s.shutdown(ctx, "External", s.externalServer)
 	}
-	wg.Wait()
-	return errors.Join(internalErr, externalErr)
+	if s.internalServer != nil {
+		internalErr = s.shutdown(ctx, "Internal", s.internalServer)
+	}
+
+	s.mu.Lock()
+	s.internalAddr, s.externalAddr = nil, nil
+	s.mu.Unlock()
+	return errors.Join(externalErr, internalErr)
 }
 
 // shutdown drains srv until ctx ends, then closes whatever is left.

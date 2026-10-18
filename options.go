@@ -81,6 +81,16 @@ type Options struct {
 	externalRouter      *mux.Router
 	doLogExternalRouter bool
 	readinessChecks     map[string]ReadinessCheckFunc
+
+	// configWarnings holds invalid Viper values, logged by Create once the
+	// logger is known.
+	configWarnings []configWarning
+}
+
+// configWarning is a configuration value that was ignored.
+type configWarning struct {
+	key string
+	err error
 }
 
 // log returns the configured logger, or [slog.Default] if none is set yet.
@@ -384,7 +394,7 @@ func WithViperPrefix(viper *viper.Viper, prefix string) Option {
 			viper.SetDefault(key(name), d.Seconds())
 			parsed, err := parseDuration(viper.Get(key(name)))
 			if err != nil {
-				o.log().Warn("Ignoring invalid duration in configuration", "key", key(name), "err", err)
+				o.configWarnings = append(o.configWarnings, configWarning{key(name), err})
 				continue
 			}
 			*d = parsed
