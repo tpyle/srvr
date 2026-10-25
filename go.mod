@@ -8,7 +8,7 @@ require (
 	github.com/spf13/cast v1.10.0
 	github.com/spf13/viper v1.21.0
 	github.com/tpyle/log-manager/v3 v3.0.0
-	github.com/tpyle/log-middleware/v3 v3.1.0
+	github.com/tpyle/log-middleware/v3 v3.2.0
 )
 
 require (
