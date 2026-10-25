@@ -56,8 +56,8 @@ github.com/subosito/gotenv v1.6.0 h1:9NlTDc1FTs4qu0DDq7AEtTPNw6SVm7uBMsUCUjABIf8
 github.com/subosito/gotenv v1.6.0/go.mod h1:Dk4QP5c2W3ibzajGcXpNraDfq2IrhjMIvMSWPKKo0FU=
 github.com/tpyle/log-manager/v3 v3.0.0 h1:z8JY1hiSwHj3Au++Cr31h1nPIGHGQ2sBEICoW/LPo+s=
 github.com/tpyle/log-manager/v3 v3.0.0/go.mod h1:tgD/CGHolQUskmHOoauwQeq5Cdnx/XQklauBYXbUAPg=
-github.com/tpyle/log-middleware/v3 v3.1.0 h1:7RBmYl56n0ncCA3PZ7adGpTv4eltc2WvYiHOVEdG+MU=
-github.com/tpyle/log-middleware/v3 v3.1.0/go.mod h1:xRtj8i4kc2g1JA5hZsiBwjMlBrvob0YbObj5Lu7ozBw=
+github.com/tpyle/log-middleware/v3 v3.2.0 h1:E5plNbGkG3wWKvfZGK4ZIPHm9D8QtKxOquCZD5Qz/DA=
+github.com/tpyle/log-middleware/v3 v3.2.0/go.mod h1:xRtj8i4kc2g1JA5hZsiBwjMlBrvob0YbObj5Lu7ozBw=
 go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
 go.uber.org/goleak v1.3.0/go.mod h1:CoHD4mav9JJNrW/WLlf7HGZPjdw8EucARQHekz1X6bE=
 go.yaml.in/yaml/v2 v2.4.3 h1:6gvOSjQoTB3vt1l+CU+tSyi/HOjfOjRLJ4YwYZGwRO0=
